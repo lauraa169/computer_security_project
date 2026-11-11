@@ -1,0 +1,5 @@
+{
+  "alice": ["professor"],
+  "bob": ["student", "TA"],
+  "eve": ["student"]
+}

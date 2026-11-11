@@ -1,0 +1,14 @@
+{
+  "users": {
+    "alice": "confidential",
+    "bob": "internal",
+    "eve": "public"
+  },
+  "paths": {
+    "/": "public",
+    "/public": "public",
+    "/projects": "internal",
+    "/projects/confidential": "confidential",
+    "/admin": "confidential"
+  }
+}

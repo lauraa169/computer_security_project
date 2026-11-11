@@ -1,0 +1,6 @@
+path,owner,group,mode,group_members
+/,alice,university,rwxr-xr-x,alice|bob|eve
+/public,eve,university,rwxrwxr-x,alice|bob|eve
+/projects,alice,course_staff,rwxrwx---,alice|bob
+/projects/confidential,alice,faculty,rwxr-x---,alice
+/admin,alice,faculty,rwx------,alice

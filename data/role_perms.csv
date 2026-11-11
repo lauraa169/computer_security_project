@@ -1,0 +1,12 @@
+role,resource,realpath,stat,list,mkdir,create,read,write,remove,rename
+professor,/,realpath,stat,list,mkdir,create,read,write,remove,rename
+professor,/public,realpath,stat,list,mkdir,create,read,write,remove,rename
+professor,/projects,realpath,stat,list,mkdir,create,read,write,remove,rename
+professor,/projects/confidential,realpath,stat,list,mkdir,create,read,write,remove,rename
+professor,/admin,realpath,stat,list,mkdir,create,read,write,remove,rename
+TA,/,realpath,stat,list,,,,,,
+TA,/public,realpath,stat,list,mkdir,create,read,write,,
+TA,/projects,realpath,stat,list,mkdir,create,read,write,,
+student,/,realpath,stat,list,,,,,,
+student,/public,realpath,stat,list,mkdir,create,read,write,,
+student,/projects,realpath,stat,list,,,read,,,
