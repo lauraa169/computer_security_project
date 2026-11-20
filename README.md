@@ -1,5 +1,41 @@
 # Computer Security Project
 
+## Step 4 · Python SFTP client
+
+From the repository root, activate your Python environment and install AsyncSSH.
+
+```sh
+python -m pip install asyncssh
+```
+
+Ask whoever runs the server for its public host key and verify its fingerprint through a trusted channel. Put the verified public key in an OpenSSH-format `known_hosts` file. For localhost on port 2222, the entry has this format.
+
+```text
+[127.0.0.1]:2222 ssh-ed25519 <public-key-data>
+```
+
+For a local server whose public key file you already trust, this command creates a dedicated known-hosts file. Adjust the path to the public key as needed.
+
+```sh
+python -c "from pathlib import Path; print('[127.0.0.1]:2222', Path('server/ssh_host_ed25519_key.pub').read_text().strip())" > local_known_hosts
+python client/client.py --host 127.0.0.1 --port 2222 --username bob --known-hosts local_known_hosts
+```
+
+The client prompts for the password and reports when SFTP v3 is connected. If you already have the server key in your user SSH known-hosts file, omit `--known-hosts`. For the example below, start the team server with a `/projects` directory and use an account authorized to read and write there.
+
+```text
+sftp> pwd
+sftp> ls /projects
+sftp> mkdir /projects/demo
+sftp> stat /projects/demo
+sftp> put README.md /projects/demo/README.md
+sftp> get /projects/demo/README.md "README copy.md"
+sftp> quit
+```
+
+Downloads replace the destination after the transfer succeeds. Uploads replace the remote file and can leave a partial file if a write fails. The client sends one request at a time and supports the listed SFTP v3 commands.
+
+**AI disclosure.** Codex assisted with implementing and verifying the Step 4 client and writing this section.
 
 ## Predefined Users
 

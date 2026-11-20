@@ -1,3 +1,12 @@
 __pycache__/
 *.pyc
 server/audit.jsonl
+
+.DS_Store
+.idea/
+.venv/
+README.downloaded.md
+local_known_hosts
+server/sftp_root/
+server/ssh_host_ed25519_key
+server/ssh_host_ed25519_key.pub
