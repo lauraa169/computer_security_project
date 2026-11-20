@@ -1,6 +1,5 @@
 # Computer Security Project
 
-### TODO
 
 ## Predefined Users
 
@@ -11,6 +10,58 @@ Access control policies are statically provisioned at server startup using datas
 | `alice` | `professor` | `confidential` (Level 2) | `university`, `course_staff`, `faculty` | System administrator with owner privileges over `/`, `/projects`, `/projects/confidential`, and `/admin`. Cleared to access confidential materials; restricted by MAC from writing downward into `internal` or `public` resources. |
 | `bob` | `student`, `TA` | `internal` (Level 1) | `university`, `course_staff` | Teaching assistant with read/write access in `/projects` and `/public`. Barred from `/admin` by both RBAC role scope and DAC permissions, and blocked by MAC from reading `confidential` resources. |
 | `eve` | `student` | `public` (Level 0) | `university` | Standard student account. Owns and manages uploads within `/public`. Granted read-only inspection on `/projects`. Denied access to `/admin` and all higher-classification tiers (`internal`, `confidential`) by MAC and DAC. |
+
+---
+
+## Authentication (AuthN)
+
+Password authentication is implemented in `server/auth.py` (Python stdlib only —
+no third-party auth library) and is wired into the SSH server's password
+callback.
+
+**Password storage.** Each user in `data/users.json` is stored as a per-user
+random salt plus a salted **scrypt** hash (`hashlib.scrypt`) and its KDF
+parameters (`n`, `r`, `p`, `dklen`). No plaintext password is ever stored or
+logged. Verification uses a constant-time comparison (`hmac.compare_digest`).
+
+**Login throttling / lockout.** `LoginThrottle` tracks consecutive failures
+per username. After `max_fails` (default **5**) failed attempts the account is
+locked for `lockout_seconds` (default **30 s**); a correct password is refused
+while locked. A successful login resets the counter. This bounds online
+brute-force and password-spraying attacks.
+
+**User enumeration resistance.** An attempt against an unknown username still
+runs a dummy scrypt computation, so response timing does not reveal whether an
+account exists.
+
+**Static user loading.** `load_users()` loads and validates `data/users.json`
+at startup. A missing file, invalid JSON, a missing field, a duplicate
+username, or malformed hash fields raise a readable `AuthError`, causing a
+clean startup failure (per the acceptance criteria).
+
+**Demo credentials** (for local testing; hashes only are stored in
+`data/users.json`):
+
+| Username | Password |
+| :--- | :--- |
+| `alice` | `alice-Prof-2026!` |
+| `bob` | `bob-TA-2026!` |
+| `eve` | `eve-Student-2026!` |
+
+> To change a password, regenerate the record with
+> `python3 -c "import sys; sys.path.insert(0,'server'); import auth, json; print(json.dumps({'username':'alice', **auth.hash_password('NEW_PASSWORD')}, indent=2))"`
+> and replace that user's entry in `data/users.json`.
+
+### Tests
+
+Authentication tests live in `tests/test_auth.py` and cover valid passwords,
+invalid passwords, malformed/missing user datasets, throttling/lockout, and
+unknown-user handling.
+
+```bash
+python3 -m pip install pytest
+python3 -m pytest tests/test_auth.py -v
+```
 
 ---
 

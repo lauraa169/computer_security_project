@@ -1,8 +1,8 @@
 [
   {
     "username": "alice",
-    "salt": "ez0Kz8LGoz7nU4lcmM/ZiA==",
-    "password_hash": "2kmKoSMIWAqDmbDaUBnnGb/6g0IfLNqXjXIDthIjVQE=",
+    "salt": "893qfWwcAKqnRmF3epNoBw==",
+    "password_hash": "Khv/QyjPLApC7s9NMQ1pQp9+L0ib0f8s4c1QuuKWr2I=",
     "n": 16384,
     "r": 8,
     "p": 1,
@@ -10,8 +10,8 @@
   },
   {
     "username": "bob",
-    "salt": "1837CE6HmLOtGIE7Sneg6A==",
-    "password_hash": "W40dLJTqfDtwZrVxtoaGA8ei+TpGyYsv3pv36wC8uXo=",
+    "salt": "dJRNOpzbJZBekEclcP966g==",
+    "password_hash": "obE8lqDNOsXavIO7Dpx0OCTPaXo13hoLlpVfrmBXoNI=",
     "n": 16384,
     "r": 8,
     "p": 1,
@@ -19,8 +19,8 @@
   },
   {
     "username": "eve",
-    "salt": "XQyQfZR92BX4i9yUf9zJBw==",
-    "password_hash": "qkJGcRpIBsLBR4KD6YUJ/Oxy2LiLIqUBOw8QjLqRnCQ=",
+    "salt": "2CUnlVkzmm6gPoCxeLFVCQ==",
+    "password_hash": "4vYs7fDyS4APou9LHwRKg3nf42hN0XtbBqwk0G49v6A=",
     "n": 16384,
     "r": 8,
     "p": 1,
