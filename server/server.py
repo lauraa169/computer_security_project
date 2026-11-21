@@ -3,6 +3,7 @@ import asyncio, asyncssh, os, struct, stat
 import logging
 from contextlib import contextmanager
 from policy import PolicyEngine
+from auth import AuthError, Authenticator
 
 # Console debug logging for AsyncSSH
 logging.basicConfig(
@@ -15,6 +16,7 @@ logging.getLogger("asyncio").setLevel(logging.INFO)
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+USERS_PATH = os.path.join(BASE_DIR, "..", "data", "users.json")
 HOST_KEY_PATH = os.path.join(BASE_DIR, 'ssh_host_ed25519_key')
 LISTEN_HOST, LISTEN_PORT = '127.0.0.1', 2222
 SFTP_SUBSYSTEM_NAME = 'sftp'
@@ -545,11 +547,15 @@ class SFTPSession(asyncssh.SSHServerSession):
 
 
 # --- Password auth implemented on the server class (no keyword args needed) ---
-def validate_user_password(username, password):
-    # TODO: replace with Argon2 verify, lockout, rate-limits, audit, salted, peppered, perhaps, mfa?
-    return username == "bob" and password == "test"
+# def validate_user_password(username, password):
+#     # TODO: replace with Argon2 verify, lockout, rate-limits, audit, salted, peppered, perhaps, mfa?
+#     return username == "bob" and password == "test"
 
 class Server(asyncssh.SSHServer):
+
+    def __init__(self, authenticator: Authenticator):
+        self.authenticator = authenticator
+
     # Tell AsyncSSH we will do user auth:
     def begin_auth(self, username):  # called when a new user starts auth
         self.username = username
@@ -559,18 +565,23 @@ class Server(asyncssh.SSHServer):
         return True
 
     def validate_password(self, username, password):
-        return validate_user_password(username, password)
+        # return validate_user_password(username, password)
+        return self.authenticator.authenticate(username, password)
 
     def session_requested(self):
         return SFTPSession(self.username)
 
 async def main():
+    try:
+        authenticator = Authenticator(users_path = USERS_PATH)
+    except AuthError as exc:
+        raise SystemExit(f"Could not load SFTP users: {exc}") from exc
     os.makedirs(JAIL_ROOT, exist_ok=True)
     print(f"Jail root: {JAIL_ROOT}")
     await asyncssh.listen(
         LISTEN_HOST, LISTEN_PORT,
         server_host_keys=[HOST_KEY_PATH],  # server identity key
-        server_factory=Server              # our auth & session handler
+        server_factory=lambda: Server(authenticator)             # our auth & session handler
     )
     print(f"SFTP listening on {LISTEN_HOST or '0.0.0.0'}:{LISTEN_PORT} (subsystem '{SFTP_SUBSYSTEM_NAME}')")
     await asyncio.Event().wait()
