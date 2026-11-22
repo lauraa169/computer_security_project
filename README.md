@@ -1,5 +1,20 @@
 # Computer Security Project
 
+## Running the SFTP server
+
+`server/server.py` is the file you run to start our SFTP server. It handles logins, checks what each user is allowed to do, and serves files from `server/sftp_root/`.
+
+From the project folder, run these in a terminal:
+
+```sh
+python -m pip install asyncssh
+python server/server.py
+```
+
+The server listens on `127.0.0.1:2222`. Keep that terminal open and use a second one for the client. If the host key is missing, run `ssh-keygen -t ed25519 -f server/ssh_host_ed25519_key` and leave the passphrase blank for this local demo.
+
+If a file operation gets denied, `server/audit.jsonl` shows which permission check blocked it.
+
 ## Python SFTP client
 
 From the repository root, activate your Python environment and install AsyncSSH.
