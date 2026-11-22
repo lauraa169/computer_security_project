@@ -1,0 +1,1 @@
+FLAG{groupXX_sftp_wins}

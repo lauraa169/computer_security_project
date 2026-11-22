@@ -15,19 +15,24 @@ import pytest
 
 from client.client import SFTPClient, SFTPError
 
+from server import policy as policy_module
 from secrets import token_urlsafe
 from server.auth import hash_password
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "server"))
 HOST = "127.0.0.1"
 PORT = 2222
 FLAG_PATH = "/projects/confidential/flag.txt"
-FLAG_CONTENT = "FLAG{sftp_access_control_demo}\n"
 PERMISSION_DENIED = 3
 
 
 def wait_for_server(process, log_path):
+    """
+    Waits until the server’s port is ready. Without it, the client could try to connect before the server finishes starting.
+    """
+
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -44,7 +49,18 @@ def wait_for_server(process, log_path):
 
 @pytest.fixture
 def running_server(tmp_path):
-    """Start the real server with an isolated jail and a temporary host key."""
+    """
+    Sets up the temporary jail, copies in the flag, generates test credentials and a host key, starts the server, and shuts it down afterward.
+    """
+    flag_relative_path = FLAG_PATH.lstrip("/")
+    demo_flag = REPO_ROOT / "server" / "sftp_root" / flag_relative_path
+    if not demo_flag.is_file():
+        pytest.fail(
+            f"Create the demo flag before running this test: {demo_flag}",
+            pytrace=False,
+        )
+    flag_content = demo_flag.read_bytes()
+
     server_dir = tmp_path / "server"
     shutil.copytree(
         REPO_ROOT / "server",
@@ -71,9 +87,9 @@ def running_server(tmp_path):
     )
 
     jail = server_dir / "sftp_root"
-    flag = jail / FLAG_PATH.lstrip("/")
+    flag = jail / flag_relative_path
     flag.parent.mkdir(parents=True)
-    flag.write_text(FLAG_CONTENT, encoding="utf-8")
+    flag.write_bytes(flag_content)
     (jail / "public").mkdir()
 
     key = asyncssh.generate_private_key("ssh-ed25519")
@@ -96,7 +112,7 @@ def running_server(tmp_path):
         )
         try:
             wait_for_server(process, log_path)
-            yield known_hosts, server_dir / "audit.jsonl", passwords
+            yield known_hosts, server_dir / "audit.jsonl", passwords, flag_content
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -125,23 +141,9 @@ async def connect_client(username, password, known_hosts):
         await client.initialize()
         yield client
 
-
-# def test_sftp_operations_and_flag_access(tmp_path):
-#     """Verify normal transfers, authorized flag access, and audited denials."""
-#     passwords = read_demo_passwords()
-#
-#     # Request the fixture after checking credentials so a missing variable
-#     # fails before a server process starts.
-#     run_flag_checks(tmp_path, passwords)
-#
-#
-# def run_flag_checks(tmp_path, passwords):
-#     # The test below supplies the server fixture through pytest.
-#     raise RuntimeError("Use the fixture-based test shown below.")
-
 def test_sftp_operations_and_flag_access(running_server, tmp_path, capsys):
     """Verify normal transfers, authorized flag access, and audited denials."""
-    known_hosts, audit_path, passwords = running_server
+    known_hosts, audit_path, passwords, flag_content = running_server
     source = tmp_path / "source.bin"
     source.write_bytes(bytes(range(256)) * 300)
 
@@ -152,15 +154,17 @@ def test_sftp_operations_and_flag_access(running_server, tmp_path, capsys):
             await bob.ls("/projects")
             await bob.stat("/projects/demo")
             await bob.put(str(source), "/projects/demo/upload.bin")
-            downloaded = tmp_path / "bob-download.bin"
-            await bob.get("/projects/demo/upload.bin", str(downloaded))
-            assert downloaded.read_bytes() == source.read_bytes()
 
+            # Flag check happens before bob's own read, so the cache is still cold for (bob, "read", "projects") — DAC denies normally.
             denied = tmp_path / "bob-flag.txt"
             with pytest.raises(SFTPError) as error:
                 await bob.get(FLAG_PATH, str(denied))
             assert error.value.code == PERMISSION_DENIED
             assert not denied.exists()
+
+            downloaded = tmp_path / "bob-download.bin"
+            await bob.get("/projects/demo/upload.bin", str(downloaded))
+            assert downloaded.read_bytes() == source.read_bytes()
 
         async with connect_client("eve", passwords["eve"], known_hosts) as eve:
             await eve.put(str(source), "/public/eve-upload.bin")
@@ -173,7 +177,7 @@ def test_sftp_operations_and_flag_access(running_server, tmp_path, capsys):
         async with connect_client("alice", passwords["alice"], known_hosts) as alice:
             downloaded = tmp_path / "alice-flag.txt"
             await alice.get(FLAG_PATH, str(downloaded))
-            assert downloaded.read_text(encoding="utf-8") == FLAG_CONTENT
+            assert downloaded.read_bytes() == flag_content
 
     asyncio.run(asyncio.wait_for(exercise(), timeout=20))
 
@@ -199,4 +203,56 @@ def test_sftp_operations_and_flag_access(running_server, tmp_path, capsys):
         assert record is not None, f"Missing flag-read audit record for {user}"
         assert record["reason"]
         assert record["timestamp"]
+        print(json.dumps(record))
+
+
+def test_cache_bypass_after_write_and_read(running_server, tmp_path, capsys):
+    """Demonstrate the cache vulnerability where an allowed read under /projects lets bob read the confidential flag he is normally denied."""
+    known_hosts, audit_path, passwords, flag_content = running_server
+    note = tmp_path / "note.txt"
+    note.write_text("bob's own file\n", encoding="utf-8")
+
+    async def exercise():
+        async with connect_client("bob", passwords["bob"], known_hosts) as bob:
+            # Cold read of the flag which is denied by DAC.
+            denied = tmp_path / "bob-flag-before.txt"
+            with pytest.raises(SFTPError) as error:
+                await bob.get(FLAG_PATH, str(denied))
+            assert error.value.code == PERMISSION_DENIED
+
+            # Bob legitimately writes then reads a file under /projects. The read is what warms the broken cache.
+            await bob.mkdir("/projects/demo")
+            await bob.put(str(note), "/projects/demo/note.txt")
+            await bob.get("/projects/demo/note.txt", str(tmp_path / "note-back.txt"))
+
+            # Same op ("read"), same top-level dir ("/projects") as the flag: the earlier allow is replayed from cache.
+            stolen = tmp_path / "bob-flag-after.txt"
+            await bob.get(FLAG_PATH, str(stolen))
+            assert stolen.read_bytes() == flag_content
+
+    asyncio.run(asyncio.wait_for(exercise(), timeout=20))
+
+    records = [
+        json.loads(line)
+        for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    flag_reads = [
+        r for r in records
+        if r["user"] == "bob" and r["op"] == "read" and r["path"] == FLAG_PATH
+    ]
+    assert flag_reads[0]["allowed"] is False
+    assert flag_reads[-1]["allowed"] is True
+    assert "cached" in flag_reads[-1]["reason"]
+
+    seen = set()
+
+    for record in records:
+        if record["user"] != "bob":
+            continue
+
+        key = (record["op"], record["path"], record["allowed"])
+        if key in seen:
+            continue
+
+        seen.add(key)
         print(json.dumps(record))

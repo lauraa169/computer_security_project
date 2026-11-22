@@ -8,6 +8,7 @@ from typing import Tuple
 CLEARANCE_ORDER = {"public": 0, "internal": 1, "confidential": 2}
 READ_OPS = {"realpath", "stat", "list", "read"}
 WRITE_OPS = {"mkdir", "write", "remove", "rename", "create"}
+CACHE_KEY_TOO_COARSE = True
 
 
 class PolicyEngine:
@@ -21,6 +22,9 @@ class PolicyEngine:
         self.mac_users: dict[str, str] = {}
         self.mac_paths: dict[str, str] = {}
         self.dac_rules: dict[str, dict] = {}
+
+        # Cache of previously allowed decisions
+        self._allow_cache: set[tuple] = set()
 
         self._load_all()
 
@@ -258,7 +262,23 @@ class PolicyEngine:
         else:
             return False, f"RBAC: Denied, operation '{op}' not granted by roles {roles}"
 
+    def _cache_key(self, user: str, op: str, full_path: str) -> tuple:
+        if CACHE_KEY_TOO_COARSE:
+            # VULNERABLE: only the top-level directory is part of the key, so
+            # /projects/notes.txt and /projects/confidential/flag.txt collide.
+            top = full_path.strip("/").split("/", 1)[0]
+            return (user, op, top)
+        # FIXED: the decision is only reused for the exact same path.
+        return (user, op, full_path)
+
     def authorize(self, user: str, op: str, full_path: str) -> Tuple[bool, str]:
+        # fast path: reuse an earlier allow decision
+        key = self._cache_key(user, op, full_path)
+        if key in self._allow_cache:
+            reason = "Allowed (cached decision)"
+            self._write_audit(user, op, full_path, True, reason)
+            return True, reason
+
         # check each policy model in order: DAC, MAC, RBAC
         for model_name, check in [
             ("DAC", self.check_dac),
@@ -273,6 +293,7 @@ class PolicyEngine:
 
         # if all checks passed, log the allowance and return success
         reason = "Allowed by DAC, MAC, and RBAC"
+        self._allow_cache.add(key)
         self._write_audit(user, op, full_path, True, reason)
         return True, reason
 
