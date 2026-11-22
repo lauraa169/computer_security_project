@@ -23,7 +23,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 
-import auth  # noqa: E402
+import auth
 
 
 # Fixtures
