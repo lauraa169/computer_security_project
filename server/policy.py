@@ -8,7 +8,6 @@ from typing import Tuple
 CLEARANCE_ORDER = {"public": 0, "internal": 1, "confidential": 2}
 READ_OPS = {"realpath", "stat", "list", "read"}
 WRITE_OPS = {"mkdir", "write", "remove", "rename", "create"}
-CACHE_KEY_TOO_COARSE = True
 
 
 class PolicyEngine:
@@ -263,13 +262,10 @@ class PolicyEngine:
             return False, f"RBAC: Denied, operation '{op}' not granted by roles {roles}"
 
     def _cache_key(self, user: str, op: str, full_path: str) -> tuple:
-        if CACHE_KEY_TOO_COARSE:
-            # VULNERABLE: only the top-level directory is part of the key, so
+            # Only the top-level directory is part of the key, so
             # /projects/notes.txt and /projects/confidential/flag.txt collide.
-            top = full_path.strip("/").split("/", 1)[0]
-            return (user, op, top)
-        # FIXED: the decision is only reused for the exact same path.
-        return (user, op, full_path)
+        top = full_path.strip("/").split("/", 1)[0]
+        return (user, op, top)
 
     def authorize(self, user: str, op: str, full_path: str) -> Tuple[bool, str]:
         # fast path: reuse an earlier allow decision
