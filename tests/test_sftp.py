@@ -15,13 +15,14 @@ import pytest
 
 from client.client import SFTPClient, SFTPError
 
-from server import policy as policy_module
 from secrets import token_urlsafe
-from server.auth import hash_password
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "server"))
+
+from auth import hash_password  # noqa: E402
+
 HOST = "127.0.0.1"
 PORT = 2222
 FLAG_PATH = "/projects/confidential/flag.txt"
