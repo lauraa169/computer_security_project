@@ -1,6 +1,6 @@
 # Computer Security Project
 
-## Step 4 · Python SFTP client
+## Python SFTP client
 
 From the repository root, activate your Python environment and install AsyncSSH.
 
@@ -35,7 +35,7 @@ sftp> quit
 
 Downloads replace the destination after the transfer succeeds. Uploads replace the remote file and can leave a partial file if a write fails. The client sends one request at a time and supports the listed SFTP v3 commands.
 
-**AI disclosure.** Codex assisted with implementing and verifying the Step 4 client and writing this section.
+
 
 ## Predefined Users
 
